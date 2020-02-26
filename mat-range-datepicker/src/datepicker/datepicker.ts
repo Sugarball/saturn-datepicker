@@ -43,7 +43,7 @@ import {
 } from '@angular/core';
 import {CanColor, mixinColor, ThemePalette} from '@angular/material/core';
 import {MatDialog, MatDialogRef} from '@angular/material/dialog';
-import {merge, Subject, Subscription} from 'rxjs';
+import {merge, Subject, BehaviorSubject, Subscription, combineLatest, Observable} from 'rxjs';
 import {SatCalendar} from './calendar';
 import {RangeCalendar} from './range-calendar';
 import {matDatepickerAnimations} from './datepicker-animations';
@@ -173,17 +173,17 @@ export class matRangeDatepicker<D> implements OnDestroy, CanColor {
   /** Whenever datepicker is for selecting range of dates. */
   @Input()
   get rangeMode(): boolean {
-    return this._rangeMode;
+    return this._rangeModeSubject.value;
   }
   set rangeMode(mode: boolean) {
-    this._rangeMode = mode;
-    if (this.rangeMode) {
+    if (mode) {
       this._validSelected = null;
     } else {
       this._beginDate = this._endDate = null;
     }
+    this._rangeModeSubject.next(mode);
   }
-  private _rangeMode;
+  private _rangeModeSubject: BehaviorSubject<boolean> = new BehaviorSubject(false);
 
   /** Start of dates interval. */
   @Input()
@@ -411,14 +411,15 @@ export class matRangeDatepicker<D> implements OnDestroy, CanColor {
       throw Error('A matRangeDatepicker can only be associated with a single input.');
     }
     this._datepickerInput = input;
+    const valueChanges = (<Observable<matRangeDatepickerRangeValue<D>|D|null>>this._datepickerInput._valueChange);
     this._inputSubscription =
-        this._datepickerInput._valueChange
-          .subscribe((value: matRangeDatepickerRangeValue<D> | D | null) => {
+        combineLatest(valueChanges, this._rangeModeSubject)
+          .subscribe(([value, rangeMode]) => {
           if (value === null) {
             this.beginDate = this.endDate = this._selected = null;
             return;
           }
-          if (this.rangeMode) {
+          if (rangeMode) {
             value = <matRangeDatepickerRangeValue<D>>value;
             if (value.begin && value.end &&
               this._dateAdapter.compareDate(value.begin, value.end) <= 0) {
